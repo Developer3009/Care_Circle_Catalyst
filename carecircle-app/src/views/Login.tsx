@@ -31,8 +31,9 @@ export default function Login() {
   const login = useMutation({
     mutationFn: (creds: { email: string; password: string }) => apiPost<UserOut>("/auth/login", creds),
     onSuccess: (user) => {
+      localStorage.removeItem("cc_demo_role");
       beginSession();
-      toast.success(`Welcome back, ${user.full_name}`);
+      toast.success(`Welcome back, ${user.full_name} (${user.role})`);
       navigate(next, { replace: true });
     },
     onError: (err) => toast.error(apiErrorMessage(err)),

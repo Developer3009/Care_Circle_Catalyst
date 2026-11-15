@@ -127,7 +127,7 @@ export default function AppShell() {
   }, [elderMode]);
 
   const rawCircle = circles.find((c) => c.id === circleId) ?? null;
-  const effectiveRole = demoRole || rawCircle?.role || "ELDER_OWNER";
+  const effectiveRole = demoRole || meQuery.data?.role || rawCircle?.role || "ELDER_OWNER";
   const circle = useMemo(() => {
     if (!rawCircle) return null;
     return {
@@ -157,9 +157,9 @@ export default function AppShell() {
 
   return (
     <AppContext.Provider value={value}>
-      <div className="min-h-svh bg-background">
-        <header className="sticky top-0 z-40 border-b border-[#24444B] bg-[#132A2F] text-white">
-          <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 sm:gap-3 px-3 sm:px-4">
+      <div className="min-h-svh w-full bg-background flex flex-col">
+        <header className="sticky top-0 z-40 border-b border-[#24444B] bg-[#132A2F] text-white w-full">
+          <div className="flex h-14 w-full items-center gap-2 sm:gap-3 px-4 sm:px-6 lg:px-8">
             <NavLink to="/app" className="flex items-center gap-2 shrink-0">
               <HeartHandshake className="h-6 w-6 shrink-0 text-[#6EE7B7]" aria-hidden />
               <span className="font-heading text-lg font-semibold tracking-tight">CareCircle</span>
@@ -268,8 +268,8 @@ export default function AppShell() {
           </div>
         </header>
 
-        <div className="mx-auto flex w-full max-w-7xl">
-          <aside className="sticky top-14 hidden h-[calc(100svh-3.5rem)] w-60 shrink-0 flex-col justify-between border-r border-[#24444B] bg-[#132A2F] p-3 text-white lg:flex">
+        <div className="flex w-full flex-1 min-h-[calc(100svh-3.5rem)]">
+          <aside className="sticky top-14 hidden h-[calc(100svh-3.5rem)] w-64 shrink-0 flex-col justify-between border-r border-[#24444B] bg-[#132A2F] p-4 text-white lg:flex">
             <nav className="flex flex-col gap-1">
               {NAV.map((item) => (
                 <NavLink

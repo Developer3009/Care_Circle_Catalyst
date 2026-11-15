@@ -51,7 +51,7 @@ export default function SettingsPage() {
   if (!circle) return <NoCircle />;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-8" data-testid="settings-page">
+    <div className="w-full space-y-6 p-4 md:p-8" data-testid="settings-page">
       <div>
         <h1 className="font-heading text-3xl font-semibold">Settings</h1>
         <p className="text-sm text-muted-foreground">Your account, how CareCircle looks, and demo tools.</p>

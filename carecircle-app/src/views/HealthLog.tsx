@@ -279,24 +279,38 @@ export default function HealthLog() {
   const { circle, role } = useApp();
   if (!circle) return <NoCircle />;
   return (
-    <div className="space-y-6 p-4 md:p-8" data-testid="health-log-page">
-      <div>
-        <h1 className="font-heading text-3xl font-semibold">Health log</h1>
-        <p className="text-sm text-muted-foreground">Vitals with out-of-range alerts, daily routine and the care-notes feed.</p>
+    <div className="space-y-6 p-4 md:p-8 w-full" data-testid="health-log-page">
+      {/* Header section with distinct separation */}
+      <div className="border-b border-border/60 pb-5">
+        <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">Health Log</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
+          Monitor clinical vitals with out-of-range alerts, track daily wellness routines, and review caregiver shift handover notes.
+        </p>
       </div>
-      <Tabs defaultValue="vitals">
-        <TabsList data-testid="health-tabs">
-          <TabsTrigger value="vitals" data-testid="health-tab-vitals">Vitals</TabsTrigger>
-          <TabsTrigger value="routine" data-testid="health-tab-routine">Routine</TabsTrigger>
-          <TabsTrigger value="notes" data-testid="health-tab-notes">Care notes</TabsTrigger>
-        </TabsList>
-        <TabsContent value="vitals">
+
+      {/* Tabs navigation & content */}
+      <Tabs defaultValue="vitals" className="w-full space-y-6">
+        <div className="flex items-center overflow-x-auto pb-1">
+          <TabsList className="h-11 bg-muted/80 p-1 rounded-xl border border-border/40 gap-1" data-testid="health-tabs">
+            <TabsTrigger value="vitals" className="px-5 py-2 text-sm font-medium rounded-lg" data-testid="health-tab-vitals">
+              Vitals & Trends
+            </TabsTrigger>
+            <TabsTrigger value="routine" className="px-5 py-2 text-sm font-medium rounded-lg" data-testid="health-tab-routine">
+              Daily Routine
+            </TabsTrigger>
+            <TabsTrigger value="notes" className="px-5 py-2 text-sm font-medium rounded-lg" data-testid="health-tab-notes">
+              Care Notes Feed
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="vitals" className="w-full focus-visible:outline-none">
           <VitalsTab circleId={circle.id} canAdd={can({ role, permissions: {} }, "add_vitals")} />
         </TabsContent>
-        <TabsContent value="routine">
+        <TabsContent value="routine" className="w-full focus-visible:outline-none">
           <RoutineTab circleId={circle.id} canManage={can({ role, permissions: {} }, "manage_tasks")} canComplete={can({ role, permissions: {} }, "log_doses")} />
         </TabsContent>
-        <TabsContent value="notes">
+        <TabsContent value="notes" className="w-full focus-visible:outline-none">
           <NotesTab circleId={circle.id} canAdd={can({ role, permissions: {} }, "add_notes")} />
         </TabsContent>
       </Tabs>

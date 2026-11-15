@@ -103,7 +103,7 @@ export default function EmergencyCard() {
   if (query.isLoading) return <div className="h-96 animate-pulse rounded-2xl bg-muted m-4 md:m-8" />;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8" data-testid="emergency-card-page">
+    <div className="w-full space-y-6 p-4 md:p-8" data-testid="emergency-card-page">
       {/* Header & Quick Scanner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

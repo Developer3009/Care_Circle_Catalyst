@@ -17,15 +17,16 @@ function assert(condition, message) {
   }
 }
 
-async function api(path, method = "GET", body = null) {
+async function api(path, method = "GET", body = null, customHeaders = {}) {
   const options = {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...customHeaders },
   };
   if (body) options.body = JSON.stringify(body);
   const res = await fetch(`${BASE_URL}${path}`, options);
   const data = await res.json().catch(() => ({}));
-  return { status: res.status, ok: res.ok, data };
+  const setCookie = res.headers.get("set-cookie") || "";
+  return { status: res.status, ok: res.ok, data, setCookie, resHeaders: res.headers };
 }
 
 async function runTestSuite() {
@@ -365,6 +366,110 @@ async function runTestSuite() {
   const r8_3 = await api("/cron/escalation");
   assert(r8_3.status === 200, "Consecutive cron call remains stable");
   assert(r8_3.data.success === true, "Cron executes idempotently");
+
+  // -------------------------------------------------------------
+  // FLOW 9: Backend Role Classification & Session Auth (At least 3 runs per role)
+  // -------------------------------------------------------------
+  console.log("\n▶ [FLOW 9] Backend Role Classification at Login & Session Auth");
+
+  // Run 9.1: Elder Role Classification (Run 1: elder@carecircle.demo)
+  console.log("\n  --- Run 9.1: Elder Login (Demo Persona) ---");
+  const r9_1 = await api("/auth/login", "POST", { email: "elder@carecircle.demo", password: "care1234" });
+  assert(r9_1.status === 200, "Elder login returns HTTP 200");
+  assert(r9_1.data.role === "ELDER_OWNER", "Elder correctly classified as ELDER_OWNER by backend");
+  assert(r9_1.setCookie.includes("cc_session="), "Backend sets cc_session cookie");
+
+  // Run 9.2: Elder Login (Run 2: ramesh.sharma@example.com)
+  console.log("\n  --- Run 9.2: Elder Login (Seed Member) ---");
+  const r9_2 = await api("/auth/login", "POST", { email: "ramesh.sharma@example.com", password: "pwd" });
+  assert(r9_2.status === 200, "Elder seed login returns HTTP 200");
+  assert(r9_2.data.role === "ELDER_OWNER", "Classified as ELDER_OWNER");
+  assert(r9_2.data.full_name === "Ramesh Sharma", "Full name returned correctly");
+
+  // Run 9.3: Elder Login (Run 3: dynamic elder email)
+  console.log("\n  --- Run 9.3: Elder Login (Registered User) ---");
+  const r9_3 = await api("/auth/login", "POST", { email: `bhagwan.das.elder.${Date.now()}@gmail.com`, password: "pwd" });
+  assert(r9_3.status === 200, "Elder registered login returns HTTP 200");
+  assert(r9_3.data.role === "ELDER_OWNER", "Elder keyword email classified as ELDER_OWNER");
+
+  // Run 9.4: Caretaker Role Classification (Run 1: caretaker@carecircle.demo)
+  console.log("\n  --- Run 9.4: Caretaker Login (Demo Persona) ---");
+  const r9_4 = await api("/auth/login", "POST", { email: "caretaker@carecircle.demo", password: "care1234" });
+  assert(r9_4.status === 200, "Caretaker login returns HTTP 200");
+  assert(r9_4.data.role === "CARETAKER", "Caretaker correctly classified as CARETAKER by backend");
+  const caretakerCookie = r9_4.setCookie.split(";")[0];
+
+  // Run 9.5: Caretaker Login (Run 2: sunita.care@gmail.com)
+  console.log("\n  --- Run 9.5: Caretaker Login (Seed Member) ---");
+  const r9_5 = await api("/auth/login", "POST", { email: "sunita.care@gmail.com", password: "pwd" });
+  assert(r9_5.status === 200, "Caretaker seed login returns HTTP 200");
+  assert(r9_5.data.role === "CARETAKER", "Seed member classified as CARETAKER");
+  assert(r9_5.data.name === "Sunita Verma", "Caretaker name returned correctly");
+
+  // Run 9.6: Caretaker Login (Run 3: nurse proxy)
+  console.log("\n  --- Run 9.6: Caretaker Login (Proxy Nurse) ---");
+  const r9_6 = await api("/auth/login", "POST", { email: "nurse.meera@apollo.org", password: "pwd" });
+  assert(r9_6.status === 200, "Nurse proxy login returns HTTP 200");
+  assert(r9_6.data.role === "CARETAKER", "Inferred/Classified as CARETAKER");
+
+  // Run 9.7: Family Role Classification (Run 1: family@carecircle.demo)
+  console.log("\n  --- Run 9.7: Family Login (Demo Persona) ---");
+  const r9_7 = await api("/auth/login", "POST", { email: "family@carecircle.demo", password: "care1234" });
+  assert(r9_7.status === 200, "Family login returns HTTP 200");
+  assert(r9_7.data.role === "FAMILY", "Family correctly classified as FAMILY by backend");
+
+  // Run 9.8: Family Login (Run 2: ananya.sharma@gmail.com)
+  console.log("\n  --- Run 9.8: Family Login (Seed Member) ---");
+  const r9_8 = await api("/auth/login", "POST", { email: "ananya.sharma@gmail.com", password: "pwd" });
+  assert(r9_8.status === 200, "Family seed login returns HTTP 200");
+  assert(r9_8.data.role === "FAMILY", "Seed member classified as FAMILY");
+
+  // Run 9.9: Family Login (Run 3: relative daughter/son)
+  console.log("\n  --- Run 9.9: Family Login (Relative Kin) ---");
+  const r9_9 = await api("/auth/login", "POST", { email: "daughter.priya@gmail.com", password: "pwd" });
+  assert(r9_9.status === 200, "Relative kin login returns HTTP 200");
+  assert(r9_9.data.role === "FAMILY", "Relative kin classified as FAMILY");
+
+  // Run 9.10: Doctor Role Classification (Run 1: doctor@carecircle.demo)
+  console.log("\n  --- Run 9.10: Doctor Login (Demo Persona) ---");
+  const r9_10 = await api("/auth/login", "POST", { email: "doctor@carecircle.demo", password: "care1234" });
+  assert(r9_10.status === 200, "Doctor login returns HTTP 200");
+  assert(r9_10.data.role === "DOCTOR_VIEWER", "Doctor correctly classified as DOCTOR_VIEWER by backend");
+  const doctorCookie = r9_10.setCookie.split(";")[0];
+
+  // Run 9.11: Doctor Login (Run 2: dr.nair.cardio@apollo.org)
+  console.log("\n  --- Run 9.11: Doctor Login (Seed Cardiologist) ---");
+  const r9_11 = await api("/auth/login", "POST", { email: "dr.nair.cardio@apollo.org", password: "pwd" });
+  assert(r9_11.status === 200, "Doctor seed login returns HTTP 200");
+  assert(r9_11.data.role === "DOCTOR_VIEWER", "Seed cardiologist classified as DOCTOR_VIEWER");
+
+  // Run 9.12: Doctor Login (Run 3: physician clinic)
+  console.log("\n  --- Run 9.12: Doctor Login (Physician Clinic) ---");
+  const r9_12 = await api("/auth/login", "POST", { email: "dr.patel@cardio-clinic.in", password: "pwd" });
+  assert(r9_12.status === 200, "Clinic physician login returns HTTP 200");
+  assert(r9_12.data.role === "DOCTOR_VIEWER", "Classified as DOCTOR_VIEWER");
+
+  // Run 9.13: Session Persistence Verification (/auth/me and /circles/mine)
+  console.log("\n  --- Run 9.13: Session Persistence for Caretaker ---");
+  const r9_13 = await api("/auth/me", "GET", null, { Cookie: caretakerCookie });
+  assert(r9_13.status === 200, "/auth/me returns HTTP 200");
+  assert(r9_13.data.role === "CARETAKER", "/auth/me resolves role to CARETAKER from session cookie");
+
+  const r9_13_circles = await api("/circles/mine", "GET", null, { Cookie: caretakerCookie });
+  assert(r9_13_circles.status === 200, "/circles/mine returns HTTP 200");
+  assert(r9_13_circles.data[0].role === "CARETAKER", "Circle role dynamically reflects authenticated CARETAKER session");
+
+  // Run 9.14: Session Persistence for Doctor
+  console.log("\n  --- Run 9.14: Session Persistence for Doctor ---");
+  const r9_14 = await api("/auth/me", "GET", null, { Cookie: doctorCookie });
+  assert(r9_14.status === 200, "/auth/me returns HTTP 200");
+  assert(r9_14.data.role === "DOCTOR_VIEWER", "/auth/me resolves role to DOCTOR_VIEWER from session cookie");
+
+  // Run 9.15: Session Logout & Invalidation
+  console.log("\n  --- Run 9.15: Session Invalidation on Logout ---");
+  const r9_15 = await api("/auth/logout", "POST", null, { Cookie: caretakerCookie });
+  assert(r9_15.status === 200, "/auth/logout returns HTTP 200");
+  assert(r9_15.setCookie.includes("Max-Age=0") || r9_15.setCookie.includes("expires="), "Logout clears cc_session cookie");
 
   console.log("\n==========================================================");
   console.log(` ALL END-TO-END USER FLOWS COMPLETED: ${passedCount} PASSED, ${failedCount} FAILED`);

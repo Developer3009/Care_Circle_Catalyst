@@ -5,6 +5,7 @@ import { LayoutDashboard, Volume2 } from "lucide-react";
 import { useApp } from "@/components/AppShell";
 import NoCircle from "@/components/NoCircle";
 import DoseCard from "@/components/DoseCard";
+import MedicineTimer from "@/components/MedicineTimer";
 import EscalationBanner from "@/components/EscalationBanner";
 import { useDoseLog } from "@/hooks/useDoseLog";
 import { fmtTime } from "@/lib/format";
@@ -51,7 +52,7 @@ export default function ElderToday() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 p-6 text-xl md:p-10" data-testid="elder-today-page">
+    <div className="w-full space-y-8 p-4 md:p-8 text-xl" data-testid="elder-today-page">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-[#52636F]" data-testid="elder-date-line">
@@ -77,6 +78,15 @@ export default function ElderToday() {
       </div>
 
       {missed.length > 0 && <EscalationBanner missed={missed} />}
+
+      <MedicineTimer
+        doses={doses}
+        onLogDose={(id, status) => {
+          const target = doses.find((d) => d.id === id);
+          if (target) logDose.mutate({ dose: target, status });
+        }}
+        elderName={circle.elder_name}
+      />
 
       {dosesQuery.isLoading ? (
         <div className="h-64 animate-pulse rounded-2xl bg-muted" />

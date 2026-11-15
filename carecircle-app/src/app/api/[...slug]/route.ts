@@ -3,13 +3,189 @@ import { supabase } from '@/lib/supabase';
 import { generateFhirR4Bundle } from '@/lib/fhir';
 import { runEscalationSweep } from '@/lib/escalation';
 
-const DEFAULT_USER = {
+interface SessionUser {
+  id: string;
+  email: string;
+  name: string;
+  full_name: string;
+  role: 'ELDER_OWNER' | 'CARETAKER' | 'FAMILY' | 'DOCTOR_VIEWER';
+}
+
+const DEFAULT_USER: SessionUser = {
   id: 'usr_elder_01',
   email: 'ramesh.sharma@example.com',
   name: 'Ramesh Sharma',
   full_name: 'Ramesh Sharma',
   role: 'ELDER_OWNER'
 };
+
+function parseSessionCookie(cookieHeader: string | null): SessionUser | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/(?:^|;\s*)cc_session=([^;]+)/);
+  if (!match) return null;
+  try {
+    const raw = decodeURIComponent(match[1]);
+    const jsonStr = Buffer.from(raw, 'base64').toString('utf-8');
+    const parsed = JSON.parse(jsonStr);
+    if (parsed && parsed.email && parsed.role) return parsed;
+  } catch {}
+  try {
+    const jsonStr = Buffer.from(decodeURIComponent(match[1]), 'base64url').toString('utf-8');
+    const parsed = JSON.parse(jsonStr);
+    if (parsed && parsed.email && parsed.role) return parsed;
+  } catch {}
+  return null;
+}
+
+function getSessionUser(request: Request): SessionUser {
+  const cookieUser = parseSessionCookie(request.headers.get('cookie'));
+  if (cookieUser) return cookieUser;
+
+  const headerEmail = request.headers.get('x-user-email');
+  if (headerEmail) {
+    const email = headerEmail.trim().toLowerCase();
+    if (email === 'caretaker@carecircle.demo' || email === 'sunita.care@gmail.com' || email.includes('caretaker') || email.includes('nurse')) {
+      return { id: 'usr_care_01', email, name: 'Sunita Verma', full_name: 'Sunita Verma', role: 'CARETAKER' };
+    }
+    if (email === 'doctor@carecircle.demo' || email === 'dr.nair.cardio@apollo.org' || email.includes('doctor') || email.includes('dr.')) {
+      return { id: 'usr_doc_01', email, name: 'Dr. K. Nair', full_name: 'Dr. K. Nair', role: 'DOCTOR_VIEWER' };
+    }
+    if (email === 'family@carecircle.demo' || email === 'ananya.sharma@gmail.com' || email.includes('family') || email.includes('daughter') || email.includes('son')) {
+      return { id: 'usr_fam_01', email, name: 'Ananya Sharma', full_name: 'Ananya Sharma', role: 'FAMILY' };
+    }
+    return { id: 'usr_elder_01', email, name: 'Ramesh Sharma', full_name: 'Ramesh Sharma', role: 'ELDER_OWNER' };
+  }
+
+  return DEFAULT_USER;
+}
+
+async function classifyAndGetUser(emailInput: string): Promise<SessionUser> {
+  const email = (emailInput || '').trim().toLowerCase();
+
+  // 1. Direct query in circle_members (Supabase)
+  try {
+    const { data: member } = await supabase
+      .from('circle_members')
+      .select('*')
+      .ilike('email', email)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (member && member.role) {
+      let role = member.role;
+      if (role === 'DOCTOR') role = 'DOCTOR_VIEWER';
+      return {
+        id: member.user_id || `usr_${member.id}`,
+        email: member.email || email,
+        name: member.name || email.split('@')[0],
+        full_name: member.name || email.split('@')[0],
+        role: role as any
+      };
+    }
+  } catch (err) {
+    console.error('Error querying circle_members:', err);
+  }
+
+  // 2. Query in users table (Supabase)
+  try {
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .ilike('email', email)
+      .limit(1)
+      .maybeSingle();
+
+    if (user) {
+      const { data: userMember } = await supabase
+        .from('circle_members')
+        .select('*')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (userMember && userMember.role) {
+        let role = userMember.role;
+        if (role === 'DOCTOR') role = 'DOCTOR_VIEWER';
+        return {
+          id: user.id,
+          email: user.email || email,
+          name: user.full_name || email.split('@')[0],
+          full_name: user.full_name || email.split('@')[0],
+          role: role as any
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Error querying users:', err);
+  }
+
+  // 3. Demo Persona & Standard Seed Accounts
+  if (email === 'elder@carecircle.demo' || email === 'ramesh.sharma@example.com' || email.includes('elder')) {
+    return {
+      id: 'usr_elder_01',
+      email: email,
+      name: 'Ramesh Sharma',
+      full_name: 'Ramesh Sharma',
+      role: 'ELDER_OWNER'
+    };
+  }
+
+  if (email === 'caretaker@carecircle.demo' || email === 'sunita.care@gmail.com' || email.includes('caretaker') || email.includes('nurse')) {
+    return {
+      id: 'usr_care_01',
+      email: email,
+      name: 'Sunita Verma',
+      full_name: 'Sunita Verma',
+      role: 'CARETAKER'
+    };
+  }
+
+  if (email === 'family@carecircle.demo' || email === 'ananya.sharma@gmail.com' || email.includes('family') || email.includes('daughter') || email.includes('son')) {
+    return {
+      id: 'usr_fam_01',
+      email: email,
+      name: 'Ananya Sharma',
+      full_name: 'Ananya Sharma',
+      role: 'FAMILY'
+    };
+  }
+
+  if (email === 'doctor@carecircle.demo' || email === 'dr.nair.cardio@apollo.org' || email.includes('doctor') || email.includes('dr.')) {
+    return {
+      id: 'usr_doctor_01',
+      email: email,
+      name: 'Dr. K. Nair',
+      full_name: 'Dr. K. Nair',
+      role: 'DOCTOR_VIEWER'
+    };
+  }
+
+  // 4. Default / General Fallback
+  const namePart = email.split('@')[0].replace(/[._-]/g, ' ');
+  const capitalized = namePart.split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+  return {
+    id: `usr_${Date.now()}`,
+    email: email,
+    name: capitalized || 'Family Member',
+    full_name: capitalized || 'Family Member',
+    role: 'FAMILY'
+  };
+}
+
+function createSessionResponse(data: any, sessionUser: SessionUser): NextResponse {
+  const res = NextResponse.json(data);
+  const sessionToken = Buffer.from(JSON.stringify(sessionUser)).toString('base64');
+  res.cookies.set({
+    name: 'cc_session',
+    value: sessionToken,
+    path: '/',
+    httpOnly: false,
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 7 // 7 days
+  });
+  return res;
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -18,11 +194,13 @@ export async function GET(request: Request) {
   try {
     // 1. /auth/me
     if (path === '/auth/me') {
-      return NextResponse.json(DEFAULT_USER);
+      const user = getSessionUser(request);
+      return NextResponse.json(user);
     }
 
     // 2. /circles/mine
     if (path === '/circles/mine') {
+      const sessionUser = getSessionUser(request);
       const { data: circlesList } = await supabase.from('circles').select('*').order('created_at', { ascending: false });
       const { data: membersData } = await supabase.from('circle_members').select('*');
       
@@ -32,7 +210,7 @@ export async function GET(request: Request) {
           name: "Dad's Health Circle",
           elder_name: "Ramesh Sharma (Age 74)",
           timezone: 'Asia/Kolkata',
-          role: 'ELDER_OWNER',
+          role: sessionUser.role || 'ELDER_OWNER',
           member_count: 4,
           passcode: 'CARE789',
           members: []
@@ -41,12 +219,18 @@ export async function GET(request: Request) {
 
       const res = circlesList.map((c: any) => {
         const cMembers = (membersData || []).filter((m: any) => m.circle_id === c.id);
+        const myMember = cMembers.find((m: any) =>
+          (m.email && sessionUser.email && m.email.toLowerCase() === sessionUser.email.toLowerCase()) ||
+          (m.user_id && sessionUser.id && m.user_id === sessionUser.id)
+        );
+        const effectiveRole = myMember?.role || sessionUser.role || 'ELDER_OWNER';
+
         return {
           id: c.id,
           name: c.name,
           elder_name: c.elder_name,
           timezone: 'Asia/Kolkata',
-          role: 'ELDER_OWNER',
+          role: effectiveRole,
           member_count: cMembers.length || 1,
           passcode: c.passcode,
           members: cMembers.map((m: any) => ({
@@ -333,7 +517,9 @@ export async function POST(request: Request) {
 
   try {
     if (path === '/auth/login') {
-      return NextResponse.json(DEFAULT_USER);
+      const email = (body.email || '').trim().toLowerCase();
+      const sessionUser = await classifyAndGetUser(email);
+      return createSessionResponse(sessionUser, sessionUser);
     }
     if (path === '/auth/register') {
       const persona = body.persona || 'ELDER';
@@ -378,11 +564,19 @@ export async function POST(request: Request) {
           status: 'ACTIVE'
         });
 
-        return NextResponse.json({
-          user: { id: userId, email, name: fullName, full_name: fullName, role: 'ELDER_OWNER' },
+        const sessionUser: SessionUser = {
+          id: userId,
+          email,
+          name: fullName,
+          full_name: fullName,
+          role: 'ELDER_OWNER'
+        };
+
+        return createSessionResponse({
+          user: sessionUser,
           passcode,
           circle_name: circleName
-        });
+        }, sessionUser);
       }
 
       // Handle CARETAKER_PROXY persona: creating on behalf of elder
@@ -415,11 +609,19 @@ export async function POST(request: Request) {
           status: 'ACTIVE'
         });
 
-        return NextResponse.json({
-          user: { id: userId, email, name: fullName, full_name: fullName, role: 'CARETAKER' },
+        const sessionUser: SessionUser = {
+          id: userId,
+          email,
+          name: fullName,
+          full_name: fullName,
+          role: 'CARETAKER'
+        };
+
+        return createSessionResponse({
+          user: sessionUser,
           passcode,
           circle_name: `${patientName}'s Care Circle`
-        });
+        }, sessionUser);
       }
 
       // Handle FAMILY_DOCTOR joining with existing passcode
@@ -443,16 +645,33 @@ export async function POST(request: Request) {
           status: 'ACTIVE' // Instant access granted since correct passcode was provided!
         });
 
-        return NextResponse.json({
-          user: { id: userId, email, name: fullName, full_name: fullName, role: joinRole },
+        const sessionUser: SessionUser = {
+          id: userId,
+          email,
+          name: fullName,
+          full_name: fullName,
+          role: joinRole as any
+        };
+
+        return createSessionResponse({
+          user: sessionUser,
           circle_name: targetCircleName
-        });
+        }, sessionUser);
       }
 
-      return NextResponse.json(DEFAULT_USER);
+      const sessionUser = await classifyAndGetUser(email);
+      return createSessionResponse(sessionUser, sessionUser);
     }
     if (path === '/auth/logout') {
-      return NextResponse.json({ success: true });
+      const res = NextResponse.json({ success: true });
+      res.cookies.set({
+        name: 'cc_session',
+        value: '',
+        path: '/',
+        maxAge: 0,
+        expires: new Date(0)
+      });
+      return res;
     }
     if (path === '/circles/join') {
       return NextResponse.json({ circle_id: 'circle_01', circle_name: "Dad's Health Circle", status: 'PENDING' });
@@ -464,12 +683,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ passcode, expires_at: new Date(Date.now() + 48 * 3600 * 1000).toISOString() });
     }
     if (path.match(/\/doses\/[^\/]+\/log/)) {
+      const sessionUser = getSessionUser(request);
       const doseId = path.split('/')[4];
       const status = body.status || 'TAKEN';
       await supabase.from('dose_events').update({
         status,
         logged_at: new Date().toISOString(),
-        logged_by: DEFAULT_USER.name
+        logged_by: sessionUser.name || DEFAULT_USER.name
       }).eq('id', doseId);
       return NextResponse.json({ success: true, status });
     }
@@ -505,21 +725,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ id, ...body, is_active: true });
     }
     if (path.match(/\/notes$/)) {
+      const sessionUser = getSessionUser(request);
       const id = 'note_' + Date.now();
       return NextResponse.json({
         id,
         body: body.body || '',
         tags: body.tags || ['Shift Note'],
-        author_name: body.author_name || DEFAULT_USER.name,
-        author_role: body.author_role || 'CARETAKER',
+        author_name: body.author_name || sessionUser.name,
+        author_role: body.author_role || sessionUser.role,
         created_at: new Date().toISOString()
       });
     }
     if (path.match(/\/change-requests$/)) {
+      const sessionUser = getSessionUser(request);
       const id = 'cr_' + Date.now();
       return NextResponse.json({
         id,
-        requested_by_name: body.requested_by_name || DEFAULT_USER.name,
+        requested_by_name: body.requested_by_name || sessionUser.name,
         entity_type: body.entity_type || 'Medication',
         entity_name: body.entity_name || body.name || 'Prescription Update',
         note: body.note || body.reason || 'Requested prescription update',

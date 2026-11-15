@@ -25,6 +25,7 @@ import {
 import { useApp } from "@/components/AppShell";
 import NoCircle from "@/components/NoCircle";
 import DoseCard from "@/components/DoseCard";
+import MedicineTimer from "@/components/MedicineTimer";
 import EscalationBanner from "@/components/EscalationBanner";
 import AdherenceRing from "@/components/AdherenceRing";
 import MedicationWizard from "@/components/MedicationWizard";
@@ -238,6 +239,15 @@ export default function TodayDashboard() {
     <div className="grid grid-cols-1 gap-6 p-4 md:p-8 lg:grid-cols-12" data-testid="today-dashboard">
       {/* Main Section */}
       <section className="space-y-6 lg:col-span-8">
+        {/* Real-time Medicine Countdown Timer & Notifications Banner */}
+        <MedicineTimer
+          doses={doses}
+          onLogDose={(id, status) => {
+            const target = doses.find((d) => d.id === id);
+            if (target) logDose.mutate({ dose: target, status });
+          }}
+          elderName={elderName}
+        />
         {/* ========================================================= */}
         {/* ROLE 1: ELDER / PATIENT VIEW (High Contrast, Accessible) */}
         {/* ========================================================= */}
