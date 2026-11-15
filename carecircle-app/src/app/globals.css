@@ -1,26 +1,44 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #F8F9FA;
+    --foreground: #1A252C;
+    --card: #ffffff;
+    --card-foreground: #1A252C;
+    --popover: #ffffff;
+    --popover-foreground: #1A252C;
+    --primary: #116B70;
+    --primary-foreground: #ffffff;
+    --secondary: #E3EDE9;
+    --secondary-foreground: #116B70;
+    --muted: #F0F4F4;
+    --muted-foreground: #52636F;
+    --accent: #E8F2EF;
+    --accent-foreground: #116B70;
+    --destructive: #DC2626;
+    --destructive-foreground: #ffffff;
+    --border: #E2E8F0;
+    --input: #CBD5E1;
+    --ring: #116B70;
+    --radius: 1rem;
   }
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom styling for Elder Mode & buttons */
+.font-heading {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid #116B70;
+  outline-offset: 2px;
 }

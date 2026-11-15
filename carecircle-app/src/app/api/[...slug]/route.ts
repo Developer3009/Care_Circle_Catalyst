@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-// Helper for cookie/session user simulation
 const DEFAULT_USER = {
   id: 'usr_elder_01',
   email: 'ramesh.sharma@example.com',
@@ -48,21 +47,35 @@ export async function GET(request: Request) {
     // 3. /circles/:id/doses
     if (path.match(/^\/circles\/[^\/]+\/doses/)) {
       const { data } = await supabase.from('dose_events').select('*');
-      const doses = (data || []).map((d: any) => ({
-        id: d.id,
-        circle_id: d.circle_id,
-        medication_id: d.medication_id,
-        medication_name: d.medication_name,
-        medication_strength: d.dosage,
-        scheduled_at: `${d.scheduled_date}T${d.scheduled_time}:00Z`,
-        status: d.status,
-        logged_at: d.logged_at,
-        logged_by: d.logged_by,
-        logged_by_name: d.logged_by,
-        instructions: 'Take after food',
-        criticality: 'HIGH',
-        escalation_level: d.escalation_level || 0
-      }));
+      const doses = (data || []).map((d: any) => {
+        // Safe ISO conversion
+        let scheduledAt = new Date().toISOString();
+        if (d.scheduled_date && d.scheduled_time) {
+          const [time, period] = d.scheduled_time.split(' ');
+          let [hours, minutes] = time.split(':').map(Number);
+          if (period === 'PM' && hours < 12) hours += 12;
+          if (period === 'AM' && hours === 12) hours = 0;
+          const dt = new Date();
+          dt.setHours(hours, minutes, 0, 0);
+          scheduledAt = dt.toISOString();
+        }
+
+        return {
+          id: d.id,
+          circle_id: d.circle_id,
+          medication_id: d.medication_id,
+          medication_name: d.medication_name,
+          medication_strength: d.dosage,
+          scheduled_at: scheduledAt,
+          status: d.status,
+          logged_at: d.logged_at,
+          logged_by: d.logged_by,
+          logged_by_name: d.logged_by,
+          instructions: 'Take after food',
+          criticality: 'HIGH',
+          escalation_level: d.escalation_level || 0
+        };
+      });
       return NextResponse.json(doses);
     }
 
@@ -179,7 +192,15 @@ export async function GET(request: Request) {
       })));
     }
 
-    // 10. /circles/:id/vitals
+    // 10. /circles/:id/doctors
+    if (path.match(/^\/circles\/[^\/]+\/doctors/)) {
+      return NextResponse.json([
+        { id: 'doc_1', name: 'Dr. K. Nair', speciality: 'Cardiologist', clinic: 'Apollo Clinic, Sector 4', phone: '+91 98222 33445' },
+        { id: 'doc_2', name: 'Dr. Meenakshi Sundaram', speciality: 'Endocrinologist', clinic: 'CareMax Diabetes Center', phone: '+91 98333 44556' }
+      ]);
+    }
+
+    // 11. /circles/:id/vitals
     if (path.match(/^\/circles\/[^\/]+\/vitals/)) {
       const { data } = await supabase.from('vitals').select('*');
       return NextResponse.json((data || []).map((v: any) => ({
@@ -193,7 +214,39 @@ export async function GET(request: Request) {
       })));
     }
 
-    // 11. /circles/:id/emergency or /emergency/:token
+    // 12. /circles/:id/notes
+    if (path.match(/^\/circles\/[^\/]+\/notes/)) {
+      return NextResponse.json([
+        { id: 'note_1', body: 'Appetite was great today. Drank 2L water as advised.', tags: ['Appetite', 'Hydration'], author_name: 'Sunita Verma (Caretaker)', author_role: 'CARETAKER', created_at: new Date().toISOString() },
+        { id: 'note_2', body: 'Felt slight dizziness in the afternoon, checked BP, came 126/80 (Normal).', tags: ['BP Check'], author_name: 'Ramesh Sharma (Elder)', author_role: 'ELDER_OWNER', created_at: new Date(Date.now() - 86400000).toISOString() }
+      ]);
+    }
+
+    // 13. /circles/:id/tasks
+    if (path.match(/^\/circles\/[^\/]+\/tasks/)) {
+      return NextResponse.json([
+        { id: 'task_1', title: 'Morning 20-min Walk in Garden', schedule: 'Daily at 7:00 AM', time_of_day: '07:00 AM', completed: true, last_completed_at: new Date().toISOString() },
+        { id: 'task_2', title: 'Drink 1 Glass Warm Water', schedule: 'Daily at 8:00 AM', time_of_day: '08:00 AM', completed: true, last_completed_at: new Date().toISOString() },
+        { id: 'task_3', title: 'Evening Breathing Exercise (Pranayam)', schedule: 'Daily at 6:00 PM', time_of_day: '06:00 PM', completed: false, last_completed_at: null }
+      ]);
+    }
+
+    // 14. /circles/:id/change-requests
+    if (path.match(/^\/circles\/[^\/]+\/change-requests/)) {
+      return NextResponse.json([
+        { id: 'cr_1', requested_by_name: 'Ananya Sharma (Daughter)', entity_type: 'Medication', entity_name: 'Add Vitamin B12 500mcg', note: 'Doctor suggested B12 supplement after last blood test.', payload: {}, status: 'PENDING', created_at: new Date().toISOString() }
+      ]);
+    }
+
+    // 15. /circles/:id/audit
+    if (path.match(/^\/circles\/[^\/]+\/audit/)) {
+      return NextResponse.json([
+        { id: 'aud_1', actor_name: 'Ramesh Sharma', actor_role: 'ELDER_OWNER', action: 'LOG_DOSE', entity: 'Metformin 500mg', created_at: new Date().toISOString(), after_json: { status: 'TAKEN' } },
+        { id: 'aud_2', actor_name: 'Sunita Verma', actor_role: 'CARETAKER', action: 'LOG_VITAL', entity: 'Blood Pressure (126/80)', created_at: new Date(Date.now() - 3600000).toISOString(), after_json: { value: '126/80' } }
+      ]);
+    }
+
+    // 16. /circles/:id/emergency or /emergency/:token
     if (path.match(/\/emergency/)) {
       return NextResponse.json({
         name: 'Ramesh Sharma',
@@ -230,30 +283,21 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
 
   try {
-    // 1. /auth/login or /auth/register
     if (path === '/auth/login' || path === '/auth/register') {
       return NextResponse.json(DEFAULT_USER);
     }
-
-    // 2. /auth/logout
     if (path === '/auth/logout') {
       return NextResponse.json({ success: true });
     }
-
-    // 3. /circles/join
     if (path === '/circles/join') {
       return NextResponse.json({ circle_id: 'circle_01', circle_name: "Dad's Health Circle", status: 'PENDING' });
     }
-
-    // 4. /circles/:id/passcode/rotate
     if (path.match(/\/passcode\/rotate/)) {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       let passcode = 'CARE';
       for (let i = 0; i < 4; i++) passcode += chars.charAt(Math.floor(Math.random() * chars.length));
       return NextResponse.json({ passcode, expires_at: new Date(Date.now() + 48 * 3600 * 1000).toISOString() });
     }
-
-    // 5. /circles/:id/doses/:doseId/log
     if (path.match(/\/doses\/[^\/]+\/log/)) {
       const doseId = path.split('/')[4];
       const status = body.status || 'TAKEN';
@@ -264,8 +308,6 @@ export async function POST(request: Request) {
       }).eq('id', doseId);
       return NextResponse.json({ success: true, status });
     }
-
-    // 6. /circles/:id/vitals
     if (path.match(/\/vitals$/)) {
       const id = 'vit_' + Date.now();
       await supabase.from('vitals').insert({
@@ -278,8 +320,10 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ id, ...body });
     }
-
-    // 7. /circles/:id/medications
+    if (path.match(/\/tasks\/[^\/]+\/complete$/)) {
+      const taskId = path.split('/')[4];
+      return NextResponse.json({ id: taskId, completed: true, last_completed_at: new Date().toISOString() });
+    }
     if (path.match(/\/medications$/)) {
       const id = 'med_' + Date.now();
       await supabase.from('medications').insert({
@@ -295,12 +339,16 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ id, ...body, is_active: true });
     }
-
-    // 8. /circles/:id/members/:memberId/approve
     if (path.match(/\/members\/[^\/]+\/approve/)) {
       const memberId = path.split('/')[4];
       await supabase.from('circle_members').update({ status: 'ACTIVE' }).eq('id', memberId);
       return NextResponse.json({ id: memberId, status: 'ACTIVE' });
+    }
+    if (path.match(/\/change-requests\/[^\/]+\/(approve|reject)/)) {
+      const parts = path.split('/');
+      const reqId = parts[4];
+      const action = parts[5];
+      return NextResponse.json({ id: reqId, status: action === 'approve' ? 'APPROVED' : 'REJECTED' });
     }
 
     return NextResponse.json({ success: true });
@@ -319,13 +367,11 @@ export async function DELETE(request: Request) {
       await supabase.from('medications').delete().eq('id', medId);
       return NextResponse.json({ success: true });
     }
-
     if (path.match(/\/members\/[^\/]+$/)) {
       const memberId = path.split('/')[4];
       await supabase.from('circle_members').delete().eq('id', memberId);
       return NextResponse.json({ success: true });
     }
-
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
