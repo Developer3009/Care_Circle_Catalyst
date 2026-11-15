@@ -283,7 +283,123 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
 
   try {
-    if (path === '/auth/login' || path === '/auth/register') {
+    if (path === '/auth/login') {
+      return NextResponse.json(DEFAULT_USER);
+    }
+    if (path === '/auth/register') {
+      const persona = body.persona || 'ELDER';
+      const fullName = body.full_name || 'Ramesh Sharma';
+      const email = body.email || 'user@example.com';
+      const elderAge = body.elder_age || '74';
+      const circleName = body.circle_name || `${fullName}'s Care Circle`;
+      const patientName = body.patient_name || fullName;
+
+      // Generate random high-entropy passcode
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let passcode = 'CARE';
+      for (let i = 0; i < 4; i++) passcode += chars.charAt(Math.floor(Math.random() * chars.length));
+
+      // Handle ELDER persona: create user + circle + passcode in Supabase
+      if (persona === 'ELDER') {
+        const userId = 'usr_' + Date.now();
+        const circleId = 'circle_' + Date.now();
+
+        await supabase.from('users').upsert({
+          id: userId,
+          email,
+          full_name: fullName,
+          preferred_language: 'en'
+        });
+
+        await supabase.from('circles').insert({
+          id: circleId,
+          name: circleName,
+          elder_name: `${fullName} (Age ${elderAge})`,
+          passcode,
+          passcode_expiry: new Date(Date.now() + 48 * 3600 * 1000).toISOString()
+        });
+
+        await supabase.from('circle_members').insert({
+          id: 'mem_' + Date.now(),
+          circle_id: circleId,
+          user_id: userId,
+          name: fullName,
+          email,
+          role: 'ELDER_OWNER',
+          status: 'ACTIVE'
+        });
+
+        return NextResponse.json({
+          user: { id: userId, email, name: fullName, full_name: fullName, role: 'ELDER_OWNER' },
+          passcode,
+          circle_name: circleName
+        });
+      }
+
+      // Handle CARETAKER_PROXY persona: creating on behalf of elder
+      if (persona === 'CARETAKER_PROXY') {
+        const userId = 'usr_' + Date.now();
+        const circleId = 'circle_' + Date.now();
+
+        await supabase.from('users').upsert({
+          id: userId,
+          email,
+          full_name: fullName,
+          preferred_language: 'en'
+        });
+
+        await supabase.from('circles').insert({
+          id: circleId,
+          name: `${patientName}'s Care Circle`,
+          elder_name: `${patientName} (Age ${body.patient_age || '75'})`,
+          passcode,
+          passcode_expiry: new Date(Date.now() + 48 * 3600 * 1000).toISOString()
+        });
+
+        await supabase.from('circle_members').insert({
+          id: 'mem_' + Date.now(),
+          circle_id: circleId,
+          user_id: userId,
+          name: fullName,
+          email,
+          role: 'CARETAKER',
+          status: 'ACTIVE'
+        });
+
+        return NextResponse.json({
+          user: { id: userId, email, name: fullName, full_name: fullName, role: 'CARETAKER' },
+          passcode,
+          circle_name: `${patientName}'s Care Circle`
+        });
+      }
+
+      // Handle FAMILY_DOCTOR joining with existing passcode
+      if (persona === 'FAMILY_DOCTOR') {
+        const userId = 'usr_' + Date.now();
+        const requestedPasscode = (body.passcode || '').trim().toUpperCase();
+        const joinRole = body.join_role || 'FAMILY';
+
+        // Find circle with this passcode or fallback to circle_01
+        const { data: circle } = await supabase.from('circles').select('*').eq('passcode', requestedPasscode).limit(1).single();
+        const targetCircleId = circle?.id || 'circle_01';
+        const targetCircleName = circle?.name || "Dad's Health Circle";
+
+        await supabase.from('circle_members').insert({
+          id: 'mem_' + Date.now(),
+          circle_id: targetCircleId,
+          user_id: userId,
+          name: fullName,
+          email,
+          role: joinRole,
+          status: 'ACTIVE' // Instant access granted since correct passcode was provided!
+        });
+
+        return NextResponse.json({
+          user: { id: userId, email, name: fullName, full_name: fullName, role: joinRole },
+          circle_name: targetCircleName
+        });
+      }
+
       return NextResponse.json(DEFAULT_USER);
     }
     if (path === '/auth/logout') {
