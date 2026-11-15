@@ -21,6 +21,7 @@ import {
   Share2,
   Lock
 } from 'lucide-react';
+import Link from 'next/link';
 import { 
   CURRENT_USER, 
   INITIAL_CIRCLE, 
@@ -242,6 +243,14 @@ export default function CareCircleDashboard() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link
+              href="/emergency"
+              className="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-full text-xs md:text-sm font-bold flex items-center gap-1.5 shadow-sm transition"
+            >
+              <AlertTriangle className="w-4 h-4 text-white" />
+              <span>SOS Emergency Card</span>
+            </Link>
+
             <button 
               onClick={() => setElderMode(!elderMode)}
               className={`px-3 py-1.5 rounded-full text-xs md:text-sm font-semibold transition flex items-center gap-1.5 ${
