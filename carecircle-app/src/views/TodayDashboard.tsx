@@ -26,6 +26,9 @@ import { useApp } from "@/components/AppShell";
 import NoCircle from "@/components/NoCircle";
 import DoseCard from "@/components/DoseCard";
 import MedicineTimer from "@/components/MedicineTimer";
+import HydrationTracker from "@/components/HydrationTracker";
+import WellBeingCheckIn from "@/components/WellBeingCheckIn";
+import DoctorConsultationReport from "@/components/DoctorConsultationReport";
 import EscalationBanner from "@/components/EscalationBanner";
 import AdherenceRing from "@/components/AdherenceRing";
 import MedicationWizard from "@/components/MedicationWizard";
@@ -276,6 +279,7 @@ export default function TodayDashboard() {
 
               {/* Elder Quick Action Buttons */}
               <div className="flex flex-wrap items-center gap-2">
+                <DoctorConsultationReport circle={circle} medications={medications} vitals={recentVitals} doses={doses} />
                 <Button
                   variant="outline"
                   size="sm"
@@ -341,6 +345,14 @@ export default function TodayDashboard() {
                 </Button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Elder Well-Being Check-in & Hydration Tracker */}
+        {role === "ELDER_OWNER" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <WellBeingCheckIn circleId={circle.id} />
+            <HydrationTracker circleId={circle.id} />
           </div>
         )}
 
@@ -426,6 +438,14 @@ export default function TodayDashboard() {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Caretaker Daily Patient Hydration & Mood Overview */}
+        {role === "CARETAKER" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <WellBeingCheckIn circleId={circle.id} />
+            <HydrationTracker circleId={circle.id} />
           </div>
         )}
 
@@ -536,6 +556,7 @@ export default function TodayDashboard() {
 
               {/* Doctor Actions */}
               <div className="flex flex-wrap items-center gap-2">
+                <DoctorConsultationReport circle={circle} medications={medications} vitals={recentVitals} doses={doses} />
                 <Button
                   size="sm"
                   onClick={() => window.print()}

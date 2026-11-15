@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, Plus, Stethoscope, XCircle } from "lucide-react";
+import { Car, CheckCircle2, HelpCircle, Plus, Stethoscope, Trash2, XCircle } from "lucide-react";
 import { useApp } from "@/components/AppShell";
 import NoCircle from "@/components/NoCircle";
 import { apiErrorMessage, fmtDateTime } from "@/lib/format";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { can } from "@/lib/permissions";
+import DoctorConsultationReport from "@/components/DoctorConsultationReport";
+import { Badge } from "@/components/ui/badge";
 import type { AppointmentOut, DoctorOut } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -208,6 +210,62 @@ export default function Appointments() {
 
   if (!circle) return <NoCircle />;
 
+  const [volunteeredRides, setVolunteeredRides] = useState<Record<string, string>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(`cc_appt_rides_${circle.id}`);
+      return saved ? JSON.parse(saved) : { apt_01: "Ananya Sharma (Daughter)" };
+    }
+    return { apt_01: "Ananya Sharma (Daughter)" };
+  });
+
+  const [doctorQuestions, setDoctorQuestions] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(`cc_doctor_questions_${circle.id}`);
+      return saved ? JSON.parse(saved) : [
+        "Ask if evening Metformin timing can be adjusted to 30 mins after food to reduce acidity",
+        "Check if blood pressure of 124/80 indicates we can lower Telmisartan dosage",
+        "Report mild right ear hearing fatigue during conversations"
+      ];
+    }
+    return [
+      "Ask if evening Metformin timing can be adjusted to 30 mins after food to reduce acidity",
+      "Check if blood pressure of 124/80 indicates we can lower Telmisartan dosage",
+      "Report mild right ear hearing fatigue during conversations"
+    ];
+  });
+
+  const [newQuestion, setNewQuestion] = useState("");
+
+  const handleVolunteerRide = (apptId: string) => {
+    const driverName = "Ananya Sharma (Family)";
+    const updated = { ...volunteeredRides, [apptId]: driverName };
+    setVolunteeredRides(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`cc_appt_rides_${circle.id}`, JSON.stringify(updated));
+    }
+    toast.success(`🚗 Volunteer registered! You are marked as the designated driver for this appointment.`);
+  };
+
+  const handleAddQuestion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newQuestion.trim()) return;
+    const updated = [...doctorQuestions, newQuestion.trim()];
+    setDoctorQuestions(updated);
+    setNewQuestion("");
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`cc_doctor_questions_${circle.id}`, JSON.stringify(updated));
+    }
+    toast.success("Question added to shared doctor consultation checklist!");
+  };
+
+  const handleRemoveQuestion = (idx: number) => {
+    const updated = doctorQuestions.filter((_, i) => i !== idx);
+    setDoctorQuestions(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`cc_doctor_questions_${circle.id}`, JSON.stringify(updated));
+    }
+  };
+
   const appts = apptsQuery.data ?? [];
   const doctors = doctorsQuery.data ?? [];
   const now = Date.now();
@@ -218,11 +276,27 @@ export default function Appointments() {
   const renderRow = (a: AppointmentOut, isPast: boolean) => (
     <div key={a.id} className={`rounded-2xl border bg-card p-4 ${a.status === "CANCELLED" ? "opacity-50" : ""}`} data-testid={`appointment-card-${a.id}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-semibold" data-testid={`appointment-title-${a.id}`}>
-            {a.title} {a.status === "CANCELLED" && <span className="text-xs uppercase text-[#B91C1C]">· cancelled</span>}
-          </p>
-          <p className="text-sm text-muted-foreground" data-testid={`appointment-when-${a.id}`}>{fmtDateTime(a.scheduled_at)}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-semibold text-base" data-testid={`appointment-title-${a.id}`}>
+              {a.title} {a.status === "CANCELLED" && <span className="text-xs uppercase text-[#B91C1C]">· cancelled</span>}
+            </p>
+            {volunteeredRides[a.id] ? (
+              <Badge variant="outline" className="border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-300 text-xs gap-1 py-0.5">
+                <Car className="h-3 w-3" /> Driver: {volunteeredRides[a.id]}
+              </Badge>
+            ) : !isPast && a.status === "SCHEDULED" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-[11px] gap-1 px-2 border-dashed border-teal-600/40 text-teal-700 hover:bg-teal-50 dark:text-teal-300"
+                onClick={() => handleVolunteerRide(a.id)}
+              >
+                <Car className="h-3 w-3" /> Volunteer Ride
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-sm text-muted-foreground mt-0.5" data-testid={`appointment-when-${a.id}`}>{fmtDateTime(a.scheduled_at)}</p>
           <p className="text-sm text-muted-foreground">
             {a.doctor_name}
             {a.location ? ` · ${a.location}` : ""}
@@ -230,7 +304,7 @@ export default function Appointments() {
           {a.notes && <p className="mt-1 text-sm text-muted-foreground">{a.notes}</p>}
         </div>
         {editable && !isPast && a.status === "SCHEDULED" && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => update.mutate({ id: a.id, status: "COMPLETED" })} data-testid={`appointment-complete-${a.id}`}>
               <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Done
             </Button>
@@ -248,9 +322,12 @@ export default function Appointments() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-3xl font-semibold">Appointments</h1>
-          <p className="text-sm text-muted-foreground">Visits, tests and follow-ups for the elder.</p>
+          <p className="text-sm text-muted-foreground">Visits, tests, ride coordination and doctor consultation notes.</p>
         </div>
-        {editable && <AppointmentDialog circleId={circle.id} doctors={doctors} />}
+        <div className="flex items-center gap-2">
+          <DoctorConsultationReport circle={circle} />
+          {editable && <AppointmentDialog circleId={circle.id} doctors={doctors} />}
+        </div>
       </div>
 
       <Tabs defaultValue="upcoming">
@@ -277,6 +354,53 @@ export default function Appointments() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Collaborative Questions for the Doctor Pool */}
+      <div className="rounded-2xl border bg-card p-5" data-testid="doctor-questions-card">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 font-heading text-lg font-semibold text-foreground">
+              <HelpCircle className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden />
+              Family Questions for the Doctor
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Collaboratively pool questions together so no critical symptom or doubt is forgotten during clinic visits.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleAddQuestion} className="mt-4 flex gap-2">
+          <Input
+            value={newQuestion}
+            onChange={(e) => setNewQuestion(e.target.value)}
+            placeholder="Add a question — e.g. “Can we adjust evening Metformin timing?”"
+            className="text-sm"
+          />
+          <Button type="submit" size="sm" className="bg-teal-600 hover:bg-teal-700 text-white shrink-0">
+            <Plus className="h-4 w-4" /> Add Question
+          </Button>
+        </form>
+
+        <div className="mt-3 space-y-2">
+          {doctorQuestions.map((q, idx) => (
+            <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-xl border bg-muted/30 text-sm">
+              <div className="flex items-center gap-2.5">
+                <span className="h-2 w-2 rounded-full bg-teal-500 shrink-0" />
+                <span className="text-foreground">{q}</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="h-7 w-7 text-muted-foreground hover:text-rose-600 shrink-0"
+                onClick={() => handleRemoveQuestion(idx)}
+                title="Remove question"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="rounded-2xl border bg-card p-5" data-testid="doctors-card">
         <div className="flex items-center justify-between">

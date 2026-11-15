@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import confetti from "canvas-confetti";
 import { apiErrorMessage } from "@/lib/format";
 import { apiPost } from "@/lib/api";
 import { speak } from "@/lib/tts";
@@ -8,7 +9,7 @@ import type { DoseOut } from "@/lib/types";
 type DoseStatus = "TAKEN" | "SNOOZED" | "SKIPPED";
 
 // Shared one-tap dose logging — invalidates the doses + adherence queries and
-// (in Elder Mode) speaks a spoken confirmation.
+// (in Elder Mode) speaks a spoken confirmation with celebratory confetti.
 export function useDoseLog(circleId: string | null, elderVoice = false) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -21,6 +22,13 @@ export function useDoseLog(circleId: string | null, elderVoice = false) {
         queryClient.invalidateQueries({ queryKey: ["medications", circleId] });
       }
       if (vars.status === "TAKEN") {
+        try {
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: { y: 0.7 },
+          });
+        } catch {}
         toast.success(`${updated.medication_name} ${updated.medication_strength} marked as taken`.trim());
         if (elderVoice) speak(`${updated.medication_name} marked as taken. Well done.`);
       } else if (vars.status === "SNOOZED") {

@@ -5,6 +5,7 @@ import { fmtTime, relativeFromNow } from "@/lib/format";
 import { INSTRUCTIONS_LABELS } from "@/lib/permissions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import PillVisual from "@/components/PillVisual";
 import type { DoseOut } from "@/lib/types";
 
 interface DoseCardProps {
@@ -59,7 +60,7 @@ export default function DoseCard({ dose, onLog, pending, variant = "standard" }:
       )}
       data-testid={`dose-card-${dose.id}`}
     >
-      <div className="flex min-w-0 items-center gap-3 sm:w-64">
+      <div className="flex min-w-0 items-center gap-3 sm:w-72">
         <div
           className={cn(
             "flex shrink-0 flex-col items-center justify-center rounded-xl bg-[#E6F0EF] text-[#0F4C50]",
@@ -71,7 +72,15 @@ export default function DoseCard({ dose, onLog, pending, variant = "standard" }:
             {fmtTime(dose.scheduled_at)}
           </span>
         </div>
-        <div className="min-w-0">
+
+        {/* Visual Pill Representation */}
+        <PillVisual
+          name={dose.medication_name}
+          strength={dose.medication_strength}
+          size={elder ? "lg" : "md"}
+        />
+
+        <div className="min-w-0 flex-1">
           <p className={cn("truncate font-semibold", elder ? "text-xl" : "text-base")} data-testid={`dose-med-name-${dose.id}`}>
             {dose.medication_name} {dose.medication_strength}
           </p>

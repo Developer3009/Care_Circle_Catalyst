@@ -6,6 +6,8 @@ import { useApp } from "@/components/AppShell";
 import NoCircle from "@/components/NoCircle";
 import DoseCard from "@/components/DoseCard";
 import MedicineTimer from "@/components/MedicineTimer";
+import HydrationTracker from "@/components/HydrationTracker";
+import WellBeingCheckIn from "@/components/WellBeingCheckIn";
 import EscalationBanner from "@/components/EscalationBanner";
 import { useDoseLog } from "@/hooks/useDoseLog";
 import { fmtTime } from "@/lib/format";
@@ -87,6 +89,12 @@ export default function ElderToday() {
         }}
         elderName={circle.elder_name}
       />
+
+      {/* Senior Daily Well-Being Check-in & Hydration Counter */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <WellBeingCheckIn circleId={circle.id} elderMode={true} />
+        <HydrationTracker circleId={circle.id} elderMode={true} />
+      </div>
 
       {dosesQuery.isLoading ? (
         <div className="h-64 animate-pulse rounded-2xl bg-muted" />
