@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { generateFhirR4Bundle } from '@/lib/fhir';
+import { runEscalationSweep } from '@/lib/escalation';
 
 const DEFAULT_USER = {
   id: 'usr_elder_01',
@@ -65,6 +66,7 @@ export async function GET(request: Request) {
 
     // 3. /circles/:id/doses
     if (path.match(/^\/circles\/[^\/]+\/doses/)) {
+      runEscalationSweep().catch(() => {});
       const { data } = await supabase.from('dose_events').select('*');
       const doses = (data || []).map((d: any) => {
         // Safe ISO conversion
