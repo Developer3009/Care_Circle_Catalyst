@@ -6,7 +6,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { queryClient } from '@/lib/queryClient';
 import App from '@/App';
 
-export default function ClientRoot() {
+export default function CatchAllClientApp() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
