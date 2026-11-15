@@ -269,6 +269,103 @@ async function runTestSuite() {
   assert(r5_3.status === 200, "Change request submission returns HTTP 200");
   assert(r5_3.data.status === "PENDING", "Change request placed into PENDING state for approval");
 
+  // -------------------------------------------------------------
+  // FLOW 6: WhatsApp Bot Conversational Commands (3 Distinct Runs)
+  // -------------------------------------------------------------
+  console.log("\n▶ [FLOW 6] WhatsApp Bot Conversational End-to-End Testing");
+
+  // Run 6.1: Elder replies "1" (Confirm Dose) via WhatsApp
+  console.log("\n  --- Run 6.1: Inbound WhatsApp '1' (Confirm Dose) ---");
+  const r6_1 = await api("/whatsapp/webhook", "POST", {
+    from: "919876543210",
+    text: "1",
+  });
+  assert(r6_1.status === 200, "WhatsApp webhook returns HTTP 200");
+  assert(r6_1.data.status === "dose_confirmed", "WhatsApp correctly parsed command '1' as dose confirmation");
+  assert(r6_1.data.reply.includes("Dose Confirmed"), "Friendly WhatsApp confirmation reply formatted");
+
+  // Run 6.2: Family member requests "STATUS" via WhatsApp
+  console.log("\n  --- Run 6.2: Inbound WhatsApp 'STATUS' (Peace-of-Mind Summary) ---");
+  const r6_2 = await api("/whatsapp/webhook", "POST", {
+    from: "919811122334",
+    text: "STATUS",
+  });
+  assert(r6_2.status === 200, "WhatsApp status webhook returns HTTP 200");
+  assert(r6_2.data.status === "status_sent", "Status command processed");
+  assert(r6_2.data.reply.includes("Daily Health Summary"), "Daily summary formatted for family");
+  assert(r6_2.data.reply.includes("Level 0 Calm"), "Escalation status reflected in WhatsApp summary");
+
+  // Run 6.3: Elder or Caregiver triggers "SOS" via WhatsApp
+  console.log("\n  --- Run 6.3: Inbound WhatsApp 'SOS' (Emergency Alert) ---");
+  const r6_3 = await api("/whatsapp/webhook", "POST", {
+    from: "919822233445",
+    text: "SOS",
+  });
+  assert(r6_3.status === 200, "WhatsApp SOS webhook returns HTTP 200");
+  assert(r6_3.data.status === "sos_triggered", "SOS emergency alert triggered via WhatsApp");
+  assert(r6_3.data.reply.includes("EMERGENCY SOS ACTIVATED"), "Emergency response returned");
+  assert(r6_3.data.reply.includes("O+ Positive"), "Critical blood group sent to first responder");
+
+  // -------------------------------------------------------------
+  // FLOW 7: HL7 FHIR R4 Clinical Export Engine (3 Distinct Runs)
+  // -------------------------------------------------------------
+  console.log("\n▶ [FLOW 7] HL7 FHIR Release 4 Clinical Export Testing");
+
+  // Run 7.1: Fetch FHIR R4 Document Bundle
+  console.log("\n  --- Run 7.1: Retrieve FHIR R4 Bundle ---");
+  const r7_1 = await api("/circles/circle_01/fhir");
+  assert(r7_1.status === 200, "FHIR endpoint returns HTTP 200");
+  assert(r7_1.data.resourceType === "Bundle", "Export is a valid FHIR ResourceType 'Bundle'");
+  assert(r7_1.data.type === "document", "Bundle type is 'document'");
+  assert(Array.isArray(r7_1.data.entry), "Bundle contains entries array");
+
+  // Run 7.2: Verify FHIR Patient and MedicationStatement Resources
+  console.log("\n  --- Run 7.2: Validate Patient and MedicationStatement Resources ---");
+  const patientEntry = r7_1.data.entry.find((e) => e.resource.resourceType === "Patient");
+  assert(!!patientEntry, "Patient resource present in FHIR bundle");
+  assert(patientEntry.resource.name[0].text.includes("Ramesh"), "Patient name conforms to FHIR format");
+
+  const medEntries = r7_1.data.entry.filter((e) => e.resource.resourceType === "MedicationStatement");
+  assert(medEntries.length >= 2, "Active medications mapped to FHIR MedicationStatement resources");
+  assert(medEntries[0].resource.status === "active", "Medication status is active");
+
+  // Run 7.3: Verify FHIR Vitals Observations with LOINC Codes
+  console.log("\n  --- Run 7.3: Validate Observation LOINC Codes ---");
+  const bpObs = r7_1.data.entry.find(
+    (e) => e.resource.resourceType === "Observation" && e.resource.code?.coding?.[0]?.code === "85354-9"
+  );
+  assert(!!bpObs, "Blood Pressure Observation mapped to LOINC 85354-9");
+  assert(bpObs.resource.component.length === 2, "BP observation has systolic and diastolic components");
+
+  const sugarObs = r7_1.data.entry.find(
+    (e) => e.resource.resourceType === "Observation" && e.resource.code?.coding?.[0]?.code === "2339-0"
+  );
+  assert(!!sugarObs, "Blood Glucose Observation mapped to LOINC 2339-0");
+
+  // -------------------------------------------------------------
+  // FLOW 8: Automated 5-Minute Escalation Cron (3 Distinct Runs)
+  // -------------------------------------------------------------
+  console.log("\n▶ [FLOW 8] Automated Escalation Cron Worker Testing");
+
+  // Run 8.1: Standard Cron Invocation
+  console.log("\n  --- Run 8.1: Standard Cron Execution ---");
+  const r8_1 = await api("/cron/escalation");
+  assert(r8_1.status === 200, "Escalation cron returns HTTP 200");
+  assert(r8_1.data.success === true, "Cron reports successful execution");
+  assert(typeof r8_1.data.checked_at === "string", "Cron returns timestamp of audit check");
+
+  // Run 8.2: Cron Returns Metrics Summary
+  console.log("\n  --- Run 8.2: Cron Audit Summary Verification ---");
+  assert(typeof r8_1.data.level_1_escalated === "number", "Reports count of Level 1 warnings");
+  assert(typeof r8_1.data.level_2_missed === "number", "Reports count of Level 2 critical escalations");
+  assert(typeof r8_1.data.notifications_dispatched === "number", "Reports notifications dispatched count");
+
+  // Run 8.3: Repeated Cron Invocation under Active State
+  console.log("\n  --- Run 8.3: Consecutive Escalation Check Stability ---");
+  const r8_3 = await api("/cron/escalation");
+  assert(r8_3.status === 200, "Consecutive cron call remains stable");
+  assert(r8_3.data.success === true, "Cron executes idempotently");
+
   console.log("\n==========================================================");
   console.log(` ALL END-TO-END USER FLOWS COMPLETED: ${passedCount} PASSED, ${failedCount} FAILED`);
   console.log("==========================================================");

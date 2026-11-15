@@ -8,6 +8,7 @@ import {
   CalendarPlus,
   CheckCircle2,
   Clock,
+  Download,
   FileText,
   HeartPulse,
   Pill,
@@ -204,6 +205,25 @@ export default function TodayDashboard() {
     utter.rate = 0.9;
     window.speechSynthesis.speak(utter);
     toast.success("Playing schedule audio aloud 🔊");
+  };
+
+  const downloadFhirExport = async () => {
+    try {
+      toast.info("Generating HL7 FHIR R4 Clinical Bundle...");
+      const res = await apiGet<any>(`/circles/${circleId}/fhir`);
+      const blob = new Blob([JSON.stringify(res, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `carecircle-fhir-r4-${circle.elder_name?.replace(/[^a-zA-Z0-9]/g, "_") || "patient"}-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("HL7 FHIR R4 Bundle downloaded successfully!");
+    } catch {
+      toast.error("Failed to generate FHIR Bundle.");
+    }
   };
 
   // Group doses by day for timeline
@@ -513,6 +533,15 @@ export default function TodayDashboard() {
                   data-testid="doctor-print-summary-btn"
                 >
                   <Printer className="h-4 w-4" /> Print Visit Summary
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={downloadFhirExport}
+                  className="border-indigo-300 bg-white text-indigo-900 hover:bg-indigo-100 dark:bg-slate-900 dark:text-indigo-100"
+                  data-testid="doctor-export-fhir-btn"
+                >
+                  <Download className="h-4 w-4 text-indigo-600" /> Export FHIR R4
                 </Button>
                 <Button
                   size="sm"

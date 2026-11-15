@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { generateFhirR4Bundle } from '@/lib/fhir';
 
 const DEFAULT_USER = {
   id: 'usr_elder_01',
@@ -289,6 +290,32 @@ export async function GET(request: Request) {
           { name: 'Telmisartan', strength: '40 mg', instructions: 'Before food', times: ['09:00 AM'] }
         ]
       });
+    }
+
+    // 17. /circles/:id/fhir (HL7 FHIR R4 Electronic Medical Record Bundle)
+    if (path.match(/\/fhir$/)) {
+      const bundle = generateFhirR4Bundle({
+        patientId: 'elder_01',
+        patientName: 'Ramesh Sharma',
+        birthDate: '1952-06-15',
+        gender: 'male',
+        bloodGroup: 'O+ Positive',
+        allergies: ['Penicillin', 'Sulfa'],
+        emergencyContacts: [
+          { name: 'Sunita Verma', relation: 'Daily Caretaker', phone: '+91 98765 43210' },
+          { name: 'Ananya Sharma', relation: 'Daughter', phone: '+91 98111 22334' }
+        ],
+        medications: [
+          { id: 'med_01', circle_id: 'circle_01', name: 'Metformin', strength: '500 mg', instructions: 'after_food', criticality: 'NORMAL', stock_count: 45, is_active: true, schedules: [{ id: 's1', frequency_type: 'DAILY', dose_amount: '1', times_of_day: ['08:30', '20:30'], days_of_week: [0,1,2,3,4,5,6] }] },
+          { id: 'med_02', circle_id: 'circle_01', name: 'Telmisartan', strength: '40 mg', instructions: 'before_food', criticality: 'HIGH', stock_count: 28, is_active: true, schedules: [{ id: 's2', frequency_type: 'DAILY', dose_amount: '1', times_of_day: ['09:00'], days_of_week: [0,1,2,3,4,5,6] }] }
+        ],
+        vitals: [
+          { id: 'vit_01', type: 'BP', value: '124', secondary_value: '80', unit: 'mmHg', measured_at: new Date().toISOString() },
+          { id: 'vit_02', type: 'SUGAR', value: '112', unit: 'mg/dL', measured_at: new Date(Date.now() - 3600000).toISOString() }
+        ],
+        attendingDoctor: { name: 'Dr. K. Nair', speciality: 'Cardiologist', phone: '+91 98222 33445' }
+      });
+      return NextResponse.json(bundle);
     }
 
     return NextResponse.json({ status: 'ok' });

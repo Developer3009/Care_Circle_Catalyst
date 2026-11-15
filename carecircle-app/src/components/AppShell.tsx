@@ -14,7 +14,10 @@ import {
   Siren,
   Stethoscope,
   Volume2,
+  WifiOff,
+  RefreshCw,
 } from "lucide-react";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { apiGet } from "@/lib/api";
 import { endSession } from "@/lib/session";
 import { ROLE_LABELS } from "@/lib/permissions";
@@ -72,6 +75,7 @@ const NAV = [
 
 export default function AppShell() {
   const navigate = useNavigate();
+  const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync();
   const [circleId, setCircleId] = useState<string>(() => localStorage.getItem("cc_circle_id") ?? "");
   const [elderMode, setElderMode] = useState<boolean>(() => localStorage.getItem("cc_elder_mode") === "1");
   const [demoRole, setDemoRoleState] = useState<string | null>(() => {
@@ -162,6 +166,33 @@ export default function AppShell() {
             </NavLink>
 
             <div className="ml-auto flex items-center gap-2 sm:gap-3">
+              {/* Offline & Sync Status Pill */}
+              {!isOnline && (
+                <Badge
+                  variant="outline"
+                  className="border-amber-400/50 bg-amber-500/20 text-amber-300 text-[11px] gap-1 cursor-pointer flex items-center px-2 py-0.5"
+                  onClick={syncNow}
+                  data-testid="offline-status-badge"
+                  title="Click to attempt sync when online"
+                >
+                  <WifiOff className="h-3 w-3 shrink-0" />
+                  <span className="hidden sm:inline">Offline</span>
+                  {pendingCount > 0 && <span>({pendingCount})</span>}
+                </Badge>
+              )}
+              {isOnline && pendingCount > 0 && (
+                <Badge
+                  variant="outline"
+                  className="border-teal-400/50 bg-teal-500/20 text-teal-300 text-[11px] gap-1 cursor-pointer flex items-center px-2 py-0.5 animate-pulse"
+                  onClick={syncNow}
+                  data-testid="syncing-status-badge"
+                  title="Click to sync pending records now"
+                >
+                  <RefreshCw className={cn("h-3 w-3 shrink-0", isSyncing && "animate-spin")} />
+                  <span>Sync ({pendingCount})</span>
+                </Badge>
+              )}
+
               {circles.length > 1 && (
                 <Select value={circleId} onValueChange={(v: string) => setCircleId(v)}>
                   <SelectTrigger
