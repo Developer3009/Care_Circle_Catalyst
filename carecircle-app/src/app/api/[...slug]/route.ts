@@ -21,26 +21,44 @@ export async function GET(request: Request) {
 
     // 2. /circles/mine
     if (path === '/circles/mine') {
-      const { data: circleData } = await supabase.from('circles').select('*').limit(1).single();
+      const { data: circlesList } = await supabase.from('circles').select('*').order('created_at', { ascending: false });
       const { data: membersData } = await supabase.from('circle_members').select('*');
       
-      const res = [{
-        id: circleData?.id || 'circle_01',
-        name: circleData?.name || "Dad's Health Circle",
-        elder_name: circleData?.elder_name || "Ramesh Sharma (Age 74)",
-        timezone: 'Asia/Kolkata',
-        role: 'ELDER_OWNER',
-        member_count: membersData?.length || 4,
-        members: (membersData || []).map((m: any) => ({
-          id: m.id,
-          user_id: m.user_id,
-          name: m.name,
-          email: m.email,
-          role: m.role,
-          status: m.status,
-          escalation_level: 0
-        }))
-      }];
+      if (!circlesList || circlesList.length === 0) {
+        return NextResponse.json([{
+          id: 'circle_01',
+          name: "Dad's Health Circle",
+          elder_name: "Ramesh Sharma (Age 74)",
+          timezone: 'Asia/Kolkata',
+          role: 'ELDER_OWNER',
+          member_count: 4,
+          passcode: 'CARE789',
+          members: []
+        }]);
+      }
+
+      const res = circlesList.map((c: any) => {
+        const cMembers = (membersData || []).filter((m: any) => m.circle_id === c.id);
+        return {
+          id: c.id,
+          name: c.name,
+          elder_name: c.elder_name,
+          timezone: 'Asia/Kolkata',
+          role: 'ELDER_OWNER',
+          member_count: cMembers.length || 1,
+          passcode: c.passcode,
+          members: cMembers.map((m: any) => ({
+            id: m.id,
+            user_id: m.user_id,
+            name: m.name,
+            email: m.email,
+            role: m.role,
+            status: m.status,
+            escalation_level: 0
+          }))
+        };
+      });
+
       return NextResponse.json(res);
     }
 
