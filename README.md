@@ -1,5 +1,3 @@
-# Care_Circle_Catalyst
-
 # CareCircle: Elderly Care & Medication Management Platform
 
 CareCircle is an elder-centric collaborative healthcare management ecosystem that keeps elderly individuals at the heart of their care while empowering families, caregivers, and doctors with proactive visibility and timely interventions.
@@ -17,29 +15,24 @@ Complete architectural details, Mermaid diagrams, sequence flows, ERDs, security
 
 ### 1. Prerequisites
 - Node.js >= 20.x
-- pnpm >= 9.x
-- Docker & Docker Compose (for PostgreSQL & Redis)
+- npm / pnpm
+- Supabase Project or PostgreSQL & Redis
 
-### 2. Infrastructure Setup
+### 2. Environment Configuration
+Create `carecircle-app/.env.local`:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://xuedgbtguelwqeorhtte.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+DATABASE_URL=postgresql://postgres:[PASSWORD]@db.xuedgbtguelwqeorhtte.supabase.co:5432/postgres
+```
+
+### 3. Run Development Server
 ```bash
-docker compose up -d
+cd carecircle-app
+npm install
+npm run dev
 ```
-This spins up:
-- **PostgreSQL 16**: `localhost:5432` (`carecircle` / `carecircle_secret`)
-- **Redis 7**: `localhost:6379`
-
-### 3. Monorepo Organization
-```
-carecircle/
-├── apps/
-│   ├── web/        # Next.js 14+ PWA Frontend (App Router, Tailwind, shadcn/ui)
-│   └── api/        # NestJS REST API & BullMQ Scheduler Engine
-├── packages/
-│   ├── shared/     # Shared Zod validation schemas, TypeScript contracts & types
-│   └── tsconfig/   # Base TypeScript configurations
-├── docker-compose.yml
-└── ARCHITECTURE.md
-```
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ---
 
