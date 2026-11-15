@@ -1,0 +1,248 @@
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Activity,
+  BarChart3,
+  CalendarCheck,
+  CalendarDays,
+  HeartHandshake,
+  LogOut,
+  Pill,
+  Settings,
+  ShieldCheck,
+  Siren,
+  Stethoscope,
+  Volume2,
+} from "lucide-react";
+import { apiGet } from "@/lib/api";
+import { endSession } from "@/lib/session";
+import { ROLE_LABELS } from "@/lib/permissions";
+import type { CircleOut, UserOut } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+interface AppContextValue {
+  me: UserOut | null;
+  circles: CircleOut[];
+  circle: CircleOut | null;
+  role: string;
+  elderMode: boolean;
+  toggleElderMode: () => void;
+}
+
+const AppContext = createContext<AppContextValue>({
+  me: null,
+  circles: [],
+  circle: null,
+  role: "",
+  elderMode: false,
+  toggleElderMode: () => {},
+});
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useApp(): AppContextValue {
+  return useContext(AppContext);
+}
+
+const NAV = [
+  { to: "/app", label: "Today", icon: CalendarCheck, end: true },
+  { to: "/app/elder", label: "Elder View", icon: Volume2 },
+  { to: "/app/medications", label: "Medications", icon: Pill },
+  { to: "/app/calendar", label: "Calendar", icon: CalendarDays },
+  { to: "/app/appointments", label: "Appointments", icon: Stethoscope },
+  { to: "/app/health", label: "Health Log", icon: Activity },
+  { to: "/app/reports", label: "Reports", icon: BarChart3 },
+  { to: "/app/members", label: "Consent Center", icon: ShieldCheck },
+  { to: "/app/emergency", label: "Emergency Card", icon: Siren },
+  { to: "/app/settings", label: "Settings", icon: Settings },
+];
+
+export default function AppShell() {
+  const navigate = useNavigate();
+  const [circleId, setCircleId] = useState<string>(() => localStorage.getItem("cc_circle_id") ?? "");
+  const [elderMode, setElderMode] = useState<boolean>(() => localStorage.getItem("cc_elder_mode") === "1");
+
+  const meQuery = useQuery({
+    queryKey: ["me"],
+    queryFn: () => apiGet<UserOut>("/auth/me"),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  const circlesQuery = useQuery({
+    queryKey: ["circles"],
+    queryFn: () => apiGet<CircleOut[]>("/circles/mine"),
+    enabled: !!meQuery.data,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (meQuery.isError) navigate("/login", { replace: true });
+  }, [meQuery.isError, navigate]);
+
+  const circles = circlesQuery.data ?? [];
+  useEffect(() => {
+    if (circles.length > 0 && !circles.some((c) => c.id === circleId)) {
+      setCircleId(circles[0].id);
+    }
+  }, [circles, circleId]);
+
+  useEffect(() => {
+    if (circleId) localStorage.setItem("cc_circle_id", circleId);
+  }, [circleId]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("elder-mode", elderMode);
+  }, [elderMode]);
+
+  const circle = circles.find((c) => c.id === circleId) ?? null;
+
+  const value = useMemo<AppContextValue>(
+    () => ({
+      me: meQuery.data ?? null,
+      circles,
+      circle,
+      role: circle?.role ?? "",
+      elderMode,
+      toggleElderMode: () =>
+        setElderMode((v) => {
+          const next = !v;
+          localStorage.setItem("cc_elder_mode", next ? "1" : "0");
+          return next;
+        }),
+    }),
+    [meQuery.data, circles, circle, elderMode]
+  );
+
+  return (
+    <AppContext.Provider value={value}>
+      <div className="min-h-svh bg-background">
+        <header className="sticky top-0 z-40 border-b border-[#24444B] bg-[#132A2F] text-white">
+          <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
+            <HeartHandshake className="h-6 w-6 shrink-0 text-[#6EE7B7]" aria-hidden />
+            <span className="font-heading text-lg font-semibold tracking-tight">CareCircle</span>
+
+            <div className="ml-auto flex items-center gap-2 sm:gap-3">
+              {circles.length > 1 && (
+                <Select value={circleId} onValueChange={(v: string) => setCircleId(v)}>
+                  <SelectTrigger
+                    className="h-9 w-[190px] border-[#24444B] bg-[#1C3D43] text-white"
+                    data-testid="circle-switcher-select"
+                  >
+                    <SelectValue>{circle?.name ?? "Circle"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {circles.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {circle && (
+                <Badge
+                  variant="secondary"
+                  className="hidden border border-[#24444B] bg-[#1C3D43] text-[#DCEBEA] sm:inline-flex"
+                  data-testid="active-role-badge"
+                >
+                  {ROLE_LABELS[circle.role] ?? circle.role}
+                </Badge>
+              )}
+              <span className="hidden text-sm text-[#CBD5E1] md:inline" data-testid="header-user-name">
+                {meQuery.data?.full_name ?? ""}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-white hover:bg-[#1C3D43] hover:text-white"
+                onClick={() => endSession()}
+                data-testid="sign-out-button"
+                aria-label="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        <div className="mx-auto flex w-full max-w-7xl">
+          <aside className="sticky top-14 hidden h-[calc(100svh-3.5rem)] w-60 shrink-0 flex-col justify-between border-r border-[#24444B] bg-[#132A2F] p-3 text-white lg:flex">
+            <nav className="flex flex-col gap-1">
+              {NAV.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-[#CBD5E1] transition-colors hover:bg-[#1C3D43] hover:text-white",
+                      isActive && "bg-[#116B70] text-white hover:bg-[#116B70]"
+                    )
+                  }
+                >
+                  <item.icon className="h-4 w-4 shrink-0" aria-hidden />
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+            <div className="border-t border-[#24444B] pt-3 text-xs text-[#9FB8B6]">
+              {circle ? (
+                <p data-testid="sidebar-circle-summary">
+                  {circle.name} · {circle.elder_name || "Elder"} · {circle.member_count} member
+                  {circle.member_count === 1 ? "" : "s"}
+                </p>
+              ) : (
+                <p>No care circle yet</p>
+              )}
+            </div>
+          </aside>
+
+          <main className="min-w-0 flex-1">
+            <nav className="flex gap-1 overflow-x-auto border-b bg-card px-3 py-2 lg:hidden">
+              {NAV.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground",
+                      isActive && "bg-primary text-primary-foreground"
+                    )
+                  }
+                >
+                  <item.icon className="h-3.5 w-3.5" aria-hidden />
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+            {meQuery.isLoading ? (
+              <div className="grid grid-cols-1 gap-6 p-4 md:p-8 lg:grid-cols-12">
+                <div className="space-y-6 lg:col-span-8">
+                  <div className="h-48 animate-pulse rounded-2xl bg-muted" />
+                  <div className="h-64 animate-pulse rounded-2xl bg-muted" />
+                </div>
+                <div className="space-y-6 lg:col-span-4">
+                  <div className="h-40 animate-pulse rounded-2xl bg-muted" />
+                  <div className="h-32 animate-pulse rounded-2xl bg-muted" />
+                </div>
+              </div>
+            ) : (
+              <Outlet />
+            )}
+          </main>
+        </div>
+      </div>
+    </AppContext.Provider>
+  );
+}
