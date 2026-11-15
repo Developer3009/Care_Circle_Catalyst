@@ -271,6 +271,7 @@ export async function GET(request: Request) {
         elder_name: 'Ramesh Sharma',
         age: 74,
         blood_group: 'O+ Positive',
+        blood_type: 'O+',
         allergies: ['Penicillin', 'Sulfa'],
         conditions: ['Type 2 Diabetes', 'Hypertension'],
         contacts: [
@@ -280,6 +281,7 @@ export async function GET(request: Request) {
         ],
         hospital: 'Apollo Hospital, Sector 4, Bangalore',
         doctor_name: 'Dr. K. Nair',
+        primary_doctor: { name: 'Dr. K. Nair', speciality: 'Cardiologist', phone: '+91 98222 33445' },
         emergency_notes: 'Carries medication pouch. Mild hearing impairment in right ear.',
         notes: 'Carries medication pouch. Mild hearing impairment in right ear.',
         medications: [
@@ -308,8 +310,8 @@ export async function POST(request: Request) {
       const persona = body.persona || 'ELDER';
       const fullName = body.full_name || 'Ramesh Sharma';
       const email = body.email || 'user@example.com';
-      const elderAge = body.elder_age || '74';
-      const circleName = body.circle_name || `${fullName}'s Care Circle`;
+      const elderAge = body.elder_age || body.patient_age || '74';
+      const circleName = body.circle_name || `${fullName.split(' ')[0]}'s Care Circle`;
       const patientName = body.patient_name || fullName;
 
       // Generate random high-entropy passcode
@@ -317,8 +319,8 @@ export async function POST(request: Request) {
       let passcode = 'CARE';
       for (let i = 0; i < 4; i++) passcode += chars.charAt(Math.floor(Math.random() * chars.length));
 
-      // Handle ELDER persona: create user + circle + passcode in Supabase
-      if (persona === 'ELDER') {
+      // Handle ELDER / ELDER_SELF persona: create user + circle + passcode in Supabase
+      if (persona === 'ELDER' || persona === 'ELDER_SELF') {
         const userId = 'usr_' + Date.now();
         const circleId = 'circle_' + Date.now();
 
@@ -473,6 +475,34 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ id, ...body, is_active: true });
     }
+    if (path.match(/\/notes$/)) {
+      const id = 'note_' + Date.now();
+      return NextResponse.json({
+        id,
+        body: body.body || '',
+        tags: body.tags || ['Shift Note'],
+        author_name: body.author_name || DEFAULT_USER.name,
+        author_role: body.author_role || 'CARETAKER',
+        created_at: new Date().toISOString()
+      });
+    }
+    if (path.match(/\/change-requests$/)) {
+      const id = 'cr_' + Date.now();
+      return NextResponse.json({
+        id,
+        requested_by_name: body.requested_by_name || DEFAULT_USER.name,
+        entity_type: body.entity_type || 'Medication',
+        entity_name: body.entity_name || body.name || 'Prescription Update',
+        note: body.note || body.reason || 'Requested prescription update',
+        payload: body,
+        status: 'PENDING',
+        created_at: new Date().toISOString()
+      });
+    }
+    if (path.match(/\/medications\/[^\/]+\/refill$/)) {
+      const medId = path.split('/')[4];
+      return NextResponse.json({ id: medId, success: true, stock_count: 60 });
+    }
     if (path.match(/\/members\/[^\/]+\/approve/)) {
       const memberId = path.split('/')[4];
       await supabase.from('circle_members').update({ status: 'ACTIVE' }).eq('id', memberId);
@@ -485,7 +515,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ id: reqId, status: action === 'approve' ? 'APPROVED' : 'REJECTED' });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, ...body });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  const url = new URL(request.url);
+  const path = url.pathname.replace(/^\/api/, '');
+  let body: any = {};
+  try {
+    body = await request.json();
+  } catch {}
+
+  try {
+    if (path.match(/\/medications\/[^\/]+$/)) {
+      const medId = path.split('/')[4];
+      return NextResponse.json({ id: medId, ...body, is_active: true });
+    }
+    if (path.match(/\/appointments\/[^\/]+$/)) {
+      const aptId = path.split('/')[4];
+      return NextResponse.json({ id: aptId, ...body });
+    }
+    if (path.match(/\/members\/[^\/]+\/permissions$/)) {
+      const memberId = path.split('/')[4];
+      return NextResponse.json({ id: memberId, permissions: body.permissions || {} });
+    }
+    if (path.match(/\/emergency$/)) {
+      return NextResponse.json({ success: true, ...body });
+    }
+    return NextResponse.json({ success: true, ...body });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -30,11 +30,13 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-interface AppContextValue {
+export interface AppContextValue {
   me: UserOut | null;
   circles: CircleOut[];
   circle: CircleOut | null;
   role: string;
+  demoRole: string | null;
+  setDemoRole: (role: string | null) => void;
   elderMode: boolean;
   toggleElderMode: () => void;
 }
@@ -44,6 +46,8 @@ const AppContext = createContext<AppContextValue>({
   circles: [],
   circle: null,
   role: "",
+  demoRole: null,
+  setDemoRole: () => {},
   elderMode: false,
   toggleElderMode: () => {},
 });
@@ -70,6 +74,21 @@ export default function AppShell() {
   const navigate = useNavigate();
   const [circleId, setCircleId] = useState<string>(() => localStorage.getItem("cc_circle_id") ?? "");
   const [elderMode, setElderMode] = useState<boolean>(() => localStorage.getItem("cc_elder_mode") === "1");
+  const [demoRole, setDemoRoleState] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("cc_demo_role") || null;
+    }
+    return null;
+  });
+
+  const setDemoRole = (newRole: string | null) => {
+    setDemoRoleState(newRole);
+    if (newRole) {
+      localStorage.setItem("cc_demo_role", newRole);
+    } else {
+      localStorage.removeItem("cc_demo_role");
+    }
+  };
 
   const meQuery = useQuery({
     queryKey: ["me"],
@@ -103,14 +122,24 @@ export default function AppShell() {
     document.documentElement.classList.toggle("elder-mode", elderMode);
   }, [elderMode]);
 
-  const circle = circles.find((c) => c.id === circleId) ?? null;
+  const rawCircle = circles.find((c) => c.id === circleId) ?? null;
+  const effectiveRole = demoRole || rawCircle?.role || "ELDER_OWNER";
+  const circle = useMemo(() => {
+    if (!rawCircle) return null;
+    return {
+      ...rawCircle,
+      role: effectiveRole,
+    };
+  }, [rawCircle, effectiveRole]);
 
   const value = useMemo<AppContextValue>(
     () => ({
       me: meQuery.data ?? null,
       circles,
       circle,
-      role: circle?.role ?? "",
+      role: effectiveRole,
+      demoRole,
+      setDemoRole,
       elderMode,
       toggleElderMode: () =>
         setElderMode((v) => {
@@ -119,22 +148,24 @@ export default function AppShell() {
           return next;
         }),
     }),
-    [meQuery.data, circles, circle, elderMode]
+    [meQuery.data, circles, circle, effectiveRole, demoRole, elderMode]
   );
 
   return (
     <AppContext.Provider value={value}>
       <div className="min-h-svh bg-background">
         <header className="sticky top-0 z-40 border-b border-[#24444B] bg-[#132A2F] text-white">
-          <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
-            <HeartHandshake className="h-6 w-6 shrink-0 text-[#6EE7B7]" aria-hidden />
-            <span className="font-heading text-lg font-semibold tracking-tight">CareCircle</span>
+          <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 sm:gap-3 px-3 sm:px-4">
+            <NavLink to="/app" className="flex items-center gap-2 shrink-0">
+              <HeartHandshake className="h-6 w-6 shrink-0 text-[#6EE7B7]" aria-hidden />
+              <span className="font-heading text-lg font-semibold tracking-tight">CareCircle</span>
+            </NavLink>
 
             <div className="ml-auto flex items-center gap-2 sm:gap-3">
               {circles.length > 1 && (
                 <Select value={circleId} onValueChange={(v: string) => setCircleId(v)}>
                   <SelectTrigger
-                    className="h-9 w-[190px] border-[#24444B] bg-[#1C3D43] text-white"
+                    className="h-9 w-[150px] sm:w-[180px] border-[#24444B] bg-[#1C3D43] text-white text-xs sm:text-sm"
                     data-testid="circle-switcher-select"
                   >
                     <SelectValue>{circle?.name ?? "Circle"}</SelectValue>
@@ -148,22 +179,54 @@ export default function AppShell() {
                   </SelectContent>
                 </Select>
               )}
-              {circle && (
-                <Badge
-                  variant="secondary"
-                  className="hidden border border-[#24444B] bg-[#1C3D43] text-[#DCEBEA] sm:inline-flex"
-                  data-testid="active-role-badge"
+
+              {/* Interactive Demo Role Switcher */}
+              <div className="flex items-center gap-1.5" data-testid="role-switcher-container">
+                <Select
+                  value={effectiveRole}
+                  onValueChange={(val: string) => setDemoRole(val)}
                 >
-                  {ROLE_LABELS[circle.role] ?? circle.role}
-                </Badge>
-              )}
-              <span className="hidden text-sm text-[#CBD5E1] md:inline" data-testid="header-user-name">
+                  <SelectTrigger
+                    className="h-9 border-[#376974] bg-[#1C3D43] text-white text-xs font-medium px-2.5 sm:px-3 focus:ring-0 focus:ring-offset-0"
+                    data-testid="role-switcher-select"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="hidden lg:inline text-[#9FB8B6] text-xs">Role:</span>
+                      <span className="font-semibold text-[#6EE7B7] text-xs">
+                        {effectiveRole === "ELDER_OWNER" && "👴 Elder"}
+                        {effectiveRole === "CARETAKER" && "🩺 Caretaker"}
+                        {effectiveRole === "FAMILY" && "👨‍👩‍👧 Family"}
+                        {effectiveRole === "DOCTOR_VIEWER" && "👨‍⚕️ Doctor"}
+                      </span>
+                      {demoRole && (
+                        <span className="rounded bg-[#0E494C] px-1 text-[10px] text-[#A7F3D0] hidden md:inline">Demo</span>
+                      )}
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent className="border-[#24444B] bg-[#132A2F] text-white shadow-xl">
+                    <SelectItem value="ELDER_OWNER" className="cursor-pointer hover:bg-[#1C3D43] focus:bg-[#1C3D43] focus:text-white">
+                      👴 Elder / Patient View
+                    </SelectItem>
+                    <SelectItem value="CARETAKER" className="cursor-pointer hover:bg-[#1C3D43] focus:bg-[#1C3D43] focus:text-white">
+                      🩺 Caretaker / Nurse View
+                    </SelectItem>
+                    <SelectItem value="FAMILY" className="cursor-pointer hover:bg-[#1C3D43] focus:bg-[#1C3D43] focus:text-white">
+                      👨‍👩‍👧 Family Member View
+                    </SelectItem>
+                    <SelectItem value="DOCTOR_VIEWER" className="cursor-pointer hover:bg-[#1C3D43] focus:bg-[#1C3D43] focus:text-white">
+                      👨‍⚕️ Doctor / Clinician (Read-Only)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <span className="hidden text-sm text-[#CBD5E1] xl:inline" data-testid="header-user-name">
                 {meQuery.data?.full_name ?? ""}
               </span>
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="text-white hover:bg-[#1C3D43] hover:text-white"
+                className="text-white hover:bg-[#1C3D43] hover:text-white shrink-0"
                 onClick={() => endSession()}
                 data-testid="sign-out-button"
                 aria-label="Sign out"
